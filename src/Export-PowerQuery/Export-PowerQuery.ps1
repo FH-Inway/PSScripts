@@ -99,104 +99,110 @@
     .INPUTS
         
 #>
-[CmdletBinding()]
-[OutputType([System.Collections.ArrayList])]
+function Export-PowerQuery {
+    [CmdletBinding(DefaultParameterSetName = 'Default')]
+    [OutputType([System.Collections.ArrayList])]
+    Param(
+        [Parameter(Mandatory = $true, Position = 0, HelpMessage = 'The path to the Excel PowerQuery Enabled Workbook.')]
+        [string]$Path,
+        [Parameter(Mandatory = $false, Position = 1, HelpMessage = 'The path to the folder where the Power Queries'' M-Code Formulae will be exported to. If not specified, `<ProjectRoot>/Source/PowerQuery/*` is used as the default source code export path for the queries.')]
+        [string]$ExportPath = (Join-Path (Split-Path $Path -Parent)),
+        [Parameter(Mandatory = $false, Position = 2, HelpMessage = 'The file extension to use for the exported Power Queries')]
+        [ValidateSet('.pq', '.m', '.pqm', '.txt', '.qry')]
+        [string]$Extension = '.pq',
+        [Parameter(Mandatory = $false, Position = 3, HelpMessage = 'If specified, the function will overwrite any existing files in the specified source code export path.')]
+        [switch]$Force
+    )
 
-Param(
-    [Parameter(Mandatory = $true, Position = 0, HelpMessage = 'The path to the Excel PowerQuery Enabled Workbook.')]
-    [string]$Path,
-    [Parameter(Mandatory = $false, Position = 1, HelpMessage = 'The path to the folder where the Power Queries'' M-Code Formulae will be exported to. If not specified, `<ProjectRoot>/Source/PowerQuery/*` is used as the default source code export path for the queries.')]
-    [string]$ExportPath = (Join-Path (Split-Path $Path -Parent)),
-    [Parameter(Mandatory = $false, Position = 2, HelpMessage = 'The file extension to use for the exported Power Queries')]
-    [ValidateSet('.pq', '.m', '.pqm', '.txt', '.qry')]
-    [string]$Extension = '.pq',
-    [Parameter(Mandatory = $false, Position = 3, HelpMessage = 'If specified, the function will overwrite any existing files in the specified source code export path.')]
-    [switch]$Force
-)
+    Begin {
 
-Begin {
+        # Check if DataMashup PowerShell Module is installed
+        If (-not (Get-Module -Name DataMashup -ListAvailable)) {
+            Write-Output 'DataMashup PowerShell Module is not installed. Please install it before running this function.' -ForegroundColor Red
+            throw 'DataMashup PowerShell Module is not installed. Please install it before running this function.'
+        }
+        Import-Module DataMashup
 
-    # Check if DataMashup PowerShell Module is installed
-    If (-not (Get-Module -Name DataMashup -ListAvailable)) {
-        Write-Output 'DataMashup PowerShell Module is not installed. Please install it before running this function.' -ForegroundColor Red
-        throw 'DataMashup PowerShell Module is not installed. Please install it before running this function.'
-    }
-
-    # Check if the specified Excel Workbook exists
-    If (-not (Test-Path -Path $Path)) {
-        Write-Output 'The specified Excel Workbook does not exist. Please specify a valid path to an Excel Workbook.' -ForegroundColor Red
-        throw 'The specified Excel Workbook does not exist. Please specify a valid path to an Excel Workbook.'
-    }
-
-    # Check if the specified Excel Workbook is a PowerQuery Enabled Workbook
-    If (-not (Test-DataMashup -Path $Path)) {
-        Write-Output 'The specified Excel Workbook is not a PowerQuery Enabled Workbook or has Data Connections Disabled.' -ForegroundColor Red
-        throw 'The specified Excel Workbook is not a PowerQuery Enabled Workbook or has Data Connections Disabled.'
-    }
-
-    # Check if the specified Export Path exists
-    If (-not (Test-Path -Path $ExportPath)) {
-        Write-Information 'The specified Export Path does not exist. Creating the path...' -ForegroundColor Yellow
-        New-Item -Path $ExportPath -ItemType Directory -Force
-    }
-
-    # For user-provided extensions:
-    If ($Extension -ne '.pq') {
-
-        # Check the provided Extension is valid:
-        $validExtensions = @('.pq', '.m', '.pqm', '.txt', '.qry')
-
-        # Parse the provided Extension to ensure has leading period:
-        If ($Extension -notlike '.?*') {
-            $Extension = ".$Extension"
+        # Check if the specified Excel Workbook exists
+        If (-not (Test-Path -Path $Path)) {
+            Write-Output 'The specified Excel Workbook does not exist. Please specify a valid path to an Excel Workbook.' -ForegroundColor Red
+            throw 'The specified Excel Workbook does not exist. Please specify a valid path to an Excel Workbook.'
         }
 
-        If (-not ($validExtensions -contains $Extension)) {
-            Write-Output 'The provided Extension is not valid. Please specify a valid file extension from the following list:' -ForegroundColor Red
-            Write-Output $validExtensions -ForegroundColor Magenta
-            throw "The provided Extension is not valid. Please specify a valid file extension from the following list: $($validExtensions -join ', ')"
+        # Check if the specified Excel Workbook is a PowerQuery Enabled Workbook
+        <#
+        If (-not (Test-DataMashup -Path $Path)) {
+            Write-Output 'The specified Excel Workbook is not a PowerQuery Enabled Workbook or has Data Connections Disabled.' -ForegroundColor Red
+            throw 'The specified Excel Workbook is not a PowerQuery Enabled Workbook or has Data Connections Disabled.'
+        }
+        #>
+
+        # Check if the specified Export Path exists
+        If (-not (Test-Path -Path $ExportPath)) {
+            Write-Information 'The specified Export Path does not exist. Creating the path...' -ForegroundColor Yellow
+            New-Item -Path $ExportPath -ItemType Directory -Force
+        }
+
+        # For user-provided extensions:
+        If ($Extension -ne '.pq') {
+
+            # Check the provided Extension is valid:
+            $validExtensions = @('.pq', '.m', '.pqm', '.txt', '.qry')
+
+            # Parse the provided Extension to ensure has leading period:
+            If ($Extension -notlike '.?*') {
+                $Extension = ".$Extension"
+            }
+
+            If (-not ($validExtensions -contains $Extension)) {
+                Write-Output 'The provided Extension is not valid. Please specify a valid file extension from the following list:' -ForegroundColor Red
+                Write-Output $validExtensions -ForegroundColor Magenta
+                throw "The provided Extension is not valid. Please specify a valid file extension from the following list: $($validExtensions -join ', ')"
+            }
         }
     }
-}
 
-Process {
+    Process {
 
-    Import-Module DataMashup
+        Import-Module DataMashup
 
-    # Export DataMashup for the PowerQueries via Export-DataMashup:
-    try {
-        $PQs = Export-DataMashup $Path
-    }
-    catch {
-        Write-Output 'An error occurred while exporting the Power Queries from the specified Excel Workbook.' -ForegroundColor Red
-        Write-Output $_.Exception.Message -ForegroundColor Magenta
-        throw "An error occurred while exporting the Power Queries from the specified Excel Workbook: $_.Exception.Message"
-    }
-    finally {
-        Remove-Module DataMashup
-    }
-
-    # Export PowerQuery query formulas to files:
-    ForEach ($pq in $PQs) {
-        $pqName = $pq.Name
-        $pqFormula = $pq.Expression
+        # Export DataMashup for the PowerQueries via Export-DataMashup:
         try {
-            $pqFormula | Out-File -FilePath "$ExportPath\$pqName$Extension" -Encoding UTF8 -Force:$Force
+            $PQs = Export-DataMashup $Path
         }
         catch {
-            Write-Output "An error occurred while exporting $pqName to file $ExportPath\$pqName$Extension" -ForegroundColor Red
+            Write-Output 'An error occurred while exporting the Power Queries from the specified Excel Workbook.' -ForegroundColor Red
             Write-Output $_.Exception.Message -ForegroundColor Magenta
-            throw "An error occurred while exporting $pqName to file $ExportPath\$pqName$Extension - $_.Exception.Message"
+            throw "An error occurred while exporting the Power Queries from the specified Excel Workbook: $_.Exception.Message"
         }
         finally {
-            Write-Output "Successfully exported $pqName to file $ExportPath\$pqName$Extension" -ForegroundColor Green
+            Remove-Module DataMashup
         }
+
+        # Export PowerQuery query formulas to files:
+        ForEach ($pq in $PQs) {
+            $pqName = $pq.Name
+            $pqFormula = $pq.Expression
+            try {
+                $pqFormula | Out-File -FilePath "$ExportPath\$pqName$Extension" -Encoding UTF8 -Force:$Force
+            }
+            catch {
+                Write-Output "An error occurred while exporting $pqName to file $ExportPath\$pqName$Extension" -ForegroundColor Red
+                Write-Output $_.Exception.Message -ForegroundColor Magenta
+                throw "An error occurred while exporting $pqName to file $ExportPath\$pqName$Extension - $_.Exception.Message"
+            }
+            finally {
+                Write-Output "Successfully exported $pqName to file $ExportPath\$pqName$Extension" -ForegroundColor Green
+            }
+        }
+    }
+
+    End {
+        Write-Output 'Successfully exported all Power Queries from the specified Excel Workbook.' -ForegroundColor Green
+        $PQs
     }
 }
 
-End {
-    Write-Output 'Successfully exported all Power Queries from the specified Excel Workbook.' -ForegroundColor Green
-}
 
 # SIG # Begin signature block
 # MIIbsQYJKoZIhvcNAQcCoIIbojCCG54CAQExDzANBglghkgBZQMEAgEFADB5Bgor
