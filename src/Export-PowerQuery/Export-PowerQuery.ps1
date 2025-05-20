@@ -139,7 +139,7 @@ function Export-PowerQuery {
 
         # Check if the specified Export Path exists
         If (-not (Test-Path -Path $ExportPath)) {
-            Write-Information 'The specified Export Path does not exist. Creating the path...' -ForegroundColor Yellow
+            Write-Information 'The specified Export Path does not exist. Creating the path...'
             New-Item -Path $ExportPath -ItemType Directory -Force
         }
 
